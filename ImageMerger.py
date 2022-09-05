@@ -24,6 +24,7 @@ class ImageToMerge:
 				img = Image.open(u)
 				return img
 		except Exception as e:
+			# TODO raise exception
 			print(str(e))
 			print(traceback.format_exc())
 			return None
@@ -33,14 +34,6 @@ class ImageToMerge:
 			self.content = self.__get_image_from_url()
 		else:
 			self.content = Image.open(self.path)
-
-	def resize(self, basewidth=800):
-		if self.content is None:
-			return None
-		wpercent = (basewidth / float(self.content.size[0]))
-		hsize = int((float(self.content.size[1]) * float(wpercent)))
-		img = self.content.resize((basewidth, hsize), Image.Resampling.LANCZOS)
-		self.content = img
 
 
 @dataclass
@@ -55,11 +48,12 @@ class Merger:
 	preserve_aspect_ratio: bool = False
 
 	def __nearest_square(self, limit):
+		# TODO: rework
 		sq = int((limit ** 0.5))
 		return sq
 
 	def __post_init__(self):
-		# self.list_images = [im.content for im in list_images]
+		self.list_images = [im.content for im in self.list_images]
 		warning_str = (f"Warning: limit_horizontal({self.limit_horizontal})*limit_vertical({self.limit_vertical}) is smaller than image set size({len(self.list_images)}). Output will not contain all images")
 
 		if self.shuffle:
@@ -69,9 +63,9 @@ class Merger:
 			self.limit_horizontal = len(self.list_images) / self.limit_vertical
 
 		elif self.limit_vertical and self.limit_horizontal:
-			print(warning_str)
 			m = self.limit_vertical * self.limit_horizontal
 			if m < len(self.list_images):
+				print(warning_str)
 				self.list_images = self.list_images[0:m]
 				self.limit_horizontal = self.limit_horizontal
 
@@ -89,12 +83,12 @@ class Merger:
 
 		elif self.merge_strategy == MERGE_GRID:
 			merge, h = [], []
-			limit_h = self.limit_horizontal
 			if self.limit_horizontal is None:
-				limit_h = self.__nearest_square(len(self.list_images))
+				self.limit_horizontal = self.__nearest_square(len(self.list_images))
+			limit_h = self.limit_horizontal
 
 			for idx, im in enumerate(self.list_images):
-				if idx < limit_h or idx > len(self.list_images) - self.limit_horizontal / 2:
+				if idx < limit_h or (idx > round(len(self.list_images) - self.limit_horizontal / 2) and len(merge) > 1):
 					h.append(im)
 				else:
 					merge.append(h)
@@ -106,7 +100,6 @@ class Merger:
 	def __generate_merged_image(self):
 
 		t = self.generate_merge_list()
-		print(t)
 		if self.merge_strategy in (MERGE_HORIZONTALLY, MERGE_VERTICALLY):
 			_im = merge_images(list_images_tmp=t, direction=self.merge_strategy, preserve_aspect_ratio=self.preserve_aspect_ratio)
 		else:
@@ -134,6 +127,7 @@ def generate_filename(suffix, extension):
 
 
 def concat_two_images(im1, im2, direction):
+	# TODO: Factorize
 	if im1 is None:
 		return im2
 	if direction == MERGE_HORIZONTALLY:
@@ -147,10 +141,19 @@ def concat_two_images(im1, im2, direction):
 	return dst
 
 
+def resize(im, basewidth=800):
+	if im is None:
+		return None
+	wpercent = (basewidth / float(im.size[0]))
+	hsize = int((float(im.size[1]) * float(wpercent)))
+	img = im.resize((basewidth, hsize), Image.Resampling.LANCZOS)
+	return img
+
+
 def merge_images(list_images_tmp: List[ImageToMerge], direction: int, preserve_aspect_ratio: bool):
 	_im = None
 	for im in list_images_tmp:
 		if not preserve_aspect_ratio:
-			im = im.resize()
+			im = resize(im)
 		_im = concat_two_images(im1=_im, im2=im, direction=direction)
 	return _im
